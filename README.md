@@ -3,7 +3,7 @@
 ## 项目简介
 
 Gloria-Mentor 是基于 **Super Agent Party** 开源项目开发的一款 AI 学习伙伴扩展，提供沉浸式的学习监督和陪伴体验。这是一个智能学习辅助创新应用。
-将static/ext/gloria-mentor/文件所有内容至于super-agent-party项目对应的static/ext/下即可运行。相关依赖及安装可参考 https://github.com/heshengtao/super-agent-party
+将static/ext/gloria-mentor/文件所有内容置于super-agent-party项目对应的static/ext/下即可运行。相关依赖及安装可参考 https://github.com/heshengtao/super-agent-party
 
 ## 核心功能
 
