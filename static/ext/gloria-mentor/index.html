@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Galgame</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root{
+  --text: #e8e8e8;
+  --accent: #ff6b35;
+  --border: rgba(255,255,255,.15);
+  --radius: 12px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font); }
+html,body{ height: 100%; overflow: hidden; }
+body{
+  background: #000 url("background/sea.png") center/cover no-repeat;
+  color: var(--text); font-size: 16px; line-height: 1.6;
+}
+/* 立绘层 */
+#characterLayer{
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: none;
+}
+#characterLayer img{
+  width: 90vw; max-width: 900px; height: 90%; max-height: 100vh;
+  object-fit: contain; object-position: bottom center;
+  transition: opacity .25s ease;
+}
+/* 好感度 */
+#loveMeter{
+  position: absolute; top: 20px; left: 20px; z-index: 10;
+  display: flex; gap: 8px; background: rgba(0,0,0,.35);
+  padding: 8px 12px; border-radius: var(--radius); backdrop-filter: blur(6px);
+}
+.heart{ font-size: 24px; color: var(--accent); }
+.heart.empty{ color: var(--border); }
+/* 对话框 */
+#talkBox{
+  position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+  width: 90vw; max-width: 800px; background: rgba(0,0,0,.45);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px 24px; z-index: 10; backdrop-filter: blur(8px);
+  min-height: 100px;
+}
+#talkBox .name{ color: var(--accent); font-weight: bold; margin-bottom: 8px; }
+#talkBox .text{ font-size: 18px; line-height: 1.7; white-space: pre-wrap; }
+/* 输入框 */
+#inputBox{
+  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  width: 90vw; max-width: 800px; display: flex; gap: 10px; z-index: 10;
+}
+#inputBox input{
+  flex: 1; background: rgba(0,0,0,.45); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 16px; color: var(--text);
+  font-size: 16px; backdrop-filter: blur(8px);
+}
+#inputBox input:focus{ outline: none; border-color: var(--accent); }
+#inputBox button{
+  background: var(--accent); border: none; border-radius: var(--radius);
+  padding: 0 20px; color: #fff; font-size: 16px; cursor: pointer;
+  transition: background .3s;
+}
+#inputBox button:hover{ background: #ff8559; }
+/* 右上角按钮 */
+#settingsButtons{
+  position: absolute; top: 20px; right: 20px; z-index: 10;
+  display: flex; gap: 10px;
+}
+/* TodoList模态框特有样式 */
+.todo-modal .modal-content {
+  width: 70%;
+  max-height: 85vh;
+}
+.todo-list {
+  display: flex; flex-direction: column; gap: 15px;
+}
+.todo-group {
+  background: rgba(255,255,255,.05); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 15px;
+}
+.todo-group h3 {
+  color: var(--accent); margin-bottom: 10px; font-size: 16px;
+}
+.todo-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.todo-item:last-child {
+  border-bottom: none;
+}
+.todo-item input[type="checkbox"] {
+  width: 18px; height: 18px; cursor: pointer;
+  accent-color: var(--accent);
+}
+.todo-item .todo-text {
+  flex: 1;\ font-size: 16px;
+}
+.todo-item .todo-time {
+  font-size: 14px; color: rgba(255,255,255,.6);
+  margin-left: 10px;
+}
+.todo-status {
+  margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.todo-actions {
+  display: flex; gap: 10px;
+}
+.todo-actions button {
+  background: var(--accent); border: none; border-radius: var(--radius);
+  padding: 8px 15px; color: #fff; font-size: 14px; cursor: pointer;
+  transition: background .3s;
+}
+.todo-actions button:hover {
+  background: #ff8559;
+}
+/* 聊天记录模态框样式 */
+.chat-modal .modal-content {
+  width: 80%;
+  max-height: 85vh;
+}
+.chat-history {
+  display: flex; flex-direction: column; gap: 15px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.chat-message {
+  padding: 12px;
+  border-radius: var(--radius);
+  max-width: 80%;
+}
+.chat-message.user {
+  background: rgba(255, 107, 53, 0.2); /* 轻微的主题色背景 */
+  align-self: flex-end;
+  border-left: 3px solid var(--accent);
+}
+.chat-message.assistant {
+  background: rgba(255, 255, 255, 0.05);
+  align-self: flex-start;
+  border-right: 3px solid var(--accent);
+}
+.chat-message .message-name {
+  font-weight: bold;
+  color: var(--accent);
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+.chat-message .message-content {
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.chat-message .message-time {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: right;
+  margin-top: 5px;
+}
+.chat-history-empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 30px;
+}
+.todo-empty {
+  text-align: center; color: rgba(255,255,255,.6); padding: 30px;
+}
+#settingsButtons button{
+  background: rgba(0,0,0,.35); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 15px; color: var(--text);
+  font-size: 16px; cursor: pointer; backdrop-filter: blur(6px);
+  transition: background .3s;
+}
+#settingsButtons button:hover{ background: rgba(0,0,0,.5); }
+
+/* 右下角按钮样式 */
+#bottomButtons {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+#bottomButtons button {
+  background: rgba(0,0,0,.7);
+  color: white;
+  border: 1px solid var(--border);
+  border-radius: 50px;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: all .3s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.3);
+}
+
+#bottomButtons button:hover {
+  background: rgba(0,0,0,.8);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0,0,0,.4);
+}
+/* 模态框 */
+.modal{
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(10px);
+}
+.modal.active{ display: flex; align-items: center; justify-content: center; }
+.modal-content{
+  background: rgba(20,20,20,.9); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 30px; max-width: 90vw; max-height: 80vh;
+  overflow-y: auto; position: relative;
+  width: 60%;
+}
+.modal-header{
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 20px;
+}
+.modal-header h2{ color: var(--accent); }
+.close-btn{
+  background: none; border: none; color: var(--text); font-size: 24px;
+  cursor: pointer; padding: 5px;
+}
+.close-btn:hover{ color: var(--accent); }
+.grid{
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 15px;
+}
+.grid-item{
+  background: rgba(255,255,255,.05); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px; cursor: pointer;
+  text-align: center; transition: all .3s;
+}
+.grid-item:hover{ background: rgba(255,255,255,.1); border-color: var(--accent); }
+.grid-item img{
+  width: 100%; height: 100px; object-fit: cover; border-radius: 8px;
+  margin-bottom: 8px;
+}
+.grid-item p{ font-size: 14px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- 立绘 -->
+<div id="characterLayer">
+  <img id="charImg" src="person/gloria/normal.png" alt=""/>
+</div>
+
+<!-- 好感度 -->
+<div id="loveMeter">
+  <i class="fa-solid fa-heart heart" data-index="1"></i>
+  <i class="fa-solid fa-heart heart" data-index="2"></i>
+  <i class="fa-solid fa-heart heart" data-index="3"></i>
+  <i class="fa-solid fa-heart heart empty" data-index="4"></i>
+  <i class="fa-solid fa-heart heart empty" data-index="5"></i>
+</div>
+
+<!-- 右上角按钮 -->
+<div id="settingsButtons">
+  <button id="bgBtn"><i class="fas fa-image"></i> 背景</button>
+  <button id="charBtn"><i class="fas fa-user"></i> 人物</button>
+  <button id="todoBtn"><i class="fas fa-tasks"></i> 学习计划</button>
+</div>
+
+<!-- 右下角按钮 -->
+<div id="bottomButtons">
+  <button id="chatBtn"><i class="fas fa-history"></i> 聊天记录</button>
+</div>
+
+<!-- 对话框 -->
+<div id="talkBox">
+  <div class="name" id="charName">Gloria</div>
+  <div class="text" id="talkText"></div>
+</div>
+
+<!-- 输入 -->
+<div id="inputBox">
+  <input id="userInput" type="text" placeholder="输入想说的话，回车发送" autocomplete="off"/>
+  <button id="sendBtn"><i class="fa-solid fa-paper-plane"></i></button>
+</div>
+
+<!-- 背景选择模态框 -->
+<div id="bgModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>选择背景</h2>
+      <button class="close-btn" onclick="closeModal('bgModal')">&times;</button>
+    </div>
+    <div id="bgGrid" class="grid"></div>
+  </div>
+</div>
+
+<!-- 人物选择模态框 -->
+<div id="charModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>选择人物</h2>
+      <button class="close-btn" onclick="closeModal('charModal')">&times;</button>
+    </div>
+    <div id="charGrid" class="grid"></div>
+  </div>
+</div>
+
+<!-- TodoList模态框 -->
+<div id="todoModal" class="modal todo-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>学习计划</h2>
+      <button class="close-btn" onclick="closeModal('todoModal')">&times;</button>
+    </div>
+    <div id="todoList" class="todo-list">
+      <div class="todo-empty">暂无学习计划</div>
+    </div>
+    <div class="todo-status">
+      <div id="todoProgress">完成度: 0%</div>
+      <div class="todo-actions">
+        <button id="saveTodoBtn">保存计划</button>
+        <button id="refreshTodoBtn">刷新计划</button>
+        <button id="closeTodoBtn" onclick="closeModal('todoModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 聊天记录模态框 -->
+<div id="chatModal" class="modal chat-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>聊天记录</h2>
+      <button class="close-btn" onclick="closeModal('chatModal')">&times;</button>
+    </div>
+    <div id="chatHistory" class="chat-history">
+      <div class="chat-history-empty">暂无聊天记录</div>
+    </div>
+    <div class="todo-status">
+      <div id="chatStats">共 0 条消息</div>
+      <div class="todo-actions">
+        <button id="clearChatBtn">清空记录</button>
+        <button id="closeChatBtn" onclick="closeModal('chatModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* =========================  状态  ========================= */
+let ws;
+let isGenerating = false;
+let currentLove = 3;
+let currentEmotion = 'normal';
+let lastRaw = '';
+let pendingState = null;
+let currentTodoList = null;
+let todoLists = [];
+let currentTodoId = null;
+let chatHistory = []; // 聊天记录
+let tempAssistantResponse = ''; // 临时存储AI流式输出的内容
+
+// 读取上次用户选择
+let currentBg   = localStorage.getItem('selectedBg')   || 'sea';
+let currentChar = localStorage.getItem('selectedChar') || 'gloria';
+let currentCharName = currentChar.charAt(0).toUpperCase() + currentChar.slice(1);
+
+const emotions = {
+  normal: 'normal.png',
+  strict: 'strict.png',
+  angry: 'angry.png',
+  happy: 'happy.png',
+  care: 'care.png',
+  encourage: 'encourage.png'
+};
+
+/* =========================  工具  ========================= */
+function setLove(n) {
+  currentLove = Math.max(0, Math.min(5, n));
+  document.querySelectorAll('.heart').forEach((h, i) =>
+    h.classList.toggle('empty', i >= currentLove)
+  );
+}
+function setEmotion(e) {
+  if (!emotions[e]) e = 'normal';
+  if (e === currentEmotion) return;
+  currentEmotion = e;
+  const img = document.getElementById('charImg');
+  img.style.opacity = 0;
+  requestAnimationFrame(() => {
+    img.src = `person/${currentChar}/${emotions[e]}`;
+    img.style.opacity = 1;
+  });
+}
+function streamTalk(txt) {
+  document.getElementById('talkText').innerHTML = txt;
+}
+
+/* =========================  模态框  ========================= */
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+/* 动态加载背景列表 */
+async function loadBackgrounds() {
+  const res  = await fetch('background/index.json');
+  const list = await res.json();
+  const grid = document.getElementById('bgGrid');
+  grid.innerHTML = '';
+  list.forEach(file => {
+    const name = file.replace('.png', '');
+    const item = document.createElement('div');
+    item.className = 'grid-item';
+    item.innerHTML = `<img src="background/${file}" loading="lazy"><p>${name}</p>`;
+    item.onclick = () => selectBackground(name);
+    grid.appendChild(item);
+  });
+}
+
+/* 动态加载人物列表 */
+async function loadCharacters() {
+  const res  = await fetch('person/index.json');
+  const list = await res.json();
+  const grid = document.getElementById('charGrid');
+  grid.innerHTML = '';
+  list.forEach(folder => {
+    const item = document.createElement('div');
+    item.className = 'grid-item';
+    item.innerHTML = `<img src="person/${folder}/normal.png" loading="lazy"><p>${folder}</p>`;
+    item.onclick = () => selectCharacter(folder);
+    grid.appendChild(item);
+  });
+}
+
+function selectBackground(name) {
+  currentBg = name;
+  document.body.style.backgroundImage = `url(background/${name}.png)`;
+  localStorage.setItem('selectedBg', name);
+  closeModal('bgModal');
+}
+function selectCharacter(folder) {
+  currentChar = folder;
+  currentCharName = folder.charAt(0).toUpperCase() + folder.slice(1);
+  document.getElementById('charName').textContent = currentCharName;
+  document.getElementById('charImg').src = `person/${folder}/normal.png`;
+  localStorage.setItem('selectedChar', folder);
+  closeModal('charModal');
+}
+
+/* 应用上次保存的设置 */
+function applySaved() {
+  document.body.style.backgroundImage = `url(background/${currentBg}.png)`;
+  document.getElementById('charName').textContent = currentCharName;
+  document.getElementById('charImg').src = `person/${currentChar}/normal.png`;
+}
+
+/* =========================  WebSocket  ========================= */
+function initWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen  = () => console.log('WS connected');
+  ws.onclose = () => setTimeout(initWS, 3000);
+  ws.onmessage = e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.type === 'messages_update' || d.type === 'broadcast_messages') {
+        const msgs = d.data.messages;
+        if (msgs.length) {
+          const m = msgs[msgs.length - 1];
+          if (m.role === 'assistant') parseAndRender(m.content);
+        }
+      }
+    } catch {}
+  };
+}
+
+function parseAndRender(raw) {
+  if (raw === lastRaw) return;
+  lastRaw = raw;
+
+  const talkOpen  = raw.lastIndexOf('<talk>');
+  const talkClose = raw.lastIndexOf('</talk>');
+  if (talkOpen !== -1) {
+    const currentTalk = talkClose === -1 || talkClose < talkOpen
+                      ? raw.substring(talkOpen + 6)
+                      : raw.substring(talkOpen + 6, talkClose);
+    streamTalk(currentTalk);
+    
+    // 临时保存当前输出内容
+    tempAssistantResponse = currentTalk;
+    
+    // 只有当对话完整结束时（检测到</talk>标签），才保存最终的AI回复到聊天记录
+    if (talkClose !== -1 && talkClose > talkOpen) {
+      addToChatHistory('assistant', currentCharName, tempAssistantResponse);
+      tempAssistantResponse = ''; // 重置临时变量
+    }
+  }
+
+  // 解析表情状态 <emotion> 标签
+  const emotion = (raw.match(/<emotion>([\s\S]*?)<\/emotion>/) || [])[1]?.trim();
+  // 解析好感度 <affection> 标签
+  const affection = parseInt((raw.match(/<affection>([\s\S]*?)<\/affection>/) || [])[1]);
+  
+  if (emotion || !isNaN(affection)) {
+    if (!pendingState) pendingState = {};
+    if (emotion) pendingState.emotion = emotion;
+    if (!isNaN(affection)) pendingState.love = affection;
+  }
+  
+  // 解析TodoList
+  const todoListMatch = raw.match(/<todoList>([\s\S]*?)<\/todoList>/);
+  if (todoListMatch) {
+    const todoListContent = todoListMatch[1];
+    const todoList = parseTodoList(todoListContent);
+    if (todoList && todoList.tasks.length > 0) {
+      updateTodoList(todoList);
+    }
+  }
+  
+  if (raw.includes('</talk>') && pendingState) {
+    if (pendingState.emotion) setEmotion(pendingState.emotion);
+    if (pendingState.love != null) setLove(pendingState.love);
+    pendingState = null;
+  }
+}
+
+// 解析TodoList内容
+function parseTodoList(content) {
+  const todoItems = [];
+  const todoRegex = /<todo\s+group="([^"]*)">([\s\S]*?)<\/todo>/g;
+  let match;
+  let groups = {};
+  
+  while ((match = todoRegex.exec(content)) !== null) {
+    const group = match[1] || '未分类';
+    const taskText = match[2].trim();
+    
+    if (!groups[group]) {
+      groups[group] = [];
+    }
+    
+    groups[group].push({
+      id: Date.now() + Math.random().toString(36).substr(2, 9),
+      text: taskText,
+      completed: false,
+      createdAt: new Date().toISOString(),
+      completedAt: null
+    });
+  }
+  
+  // 如果没有匹配到<todo>标签，尝试解析旧格式的列表项
+  if (todoItems.length === 0) {
+    const lines = content.split('\n');
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('- ')) {
+        if (!groups['未分类']) {
+          groups['未分类'] = [];
+        }
+        groups['未分类'].push({
+          id: Date.now() + Math.random().toString(36).substr(2, 9),
+          text: trimmedLine.substring(2).trim(),
+          completed: false,
+          createdAt: new Date().toISOString(),
+          completedAt: null
+        });
+      }
+    });
+  }
+  
+  const tasks = [];
+  Object.keys(groups).forEach(groupName => {
+    groups[groupName].forEach(task => {
+      tasks.push({
+        ...task,
+        group: groupName
+      });
+    });
+  });
+  
+  return {
+    id: Date.now().toString(),
+    createdAt: new Date().toISOString(),
+    groups: groups,
+    tasks: tasks,
+    completed: false
+  };
+}
+
+// 更新TodoList
+function updateTodoList(todoList) {
+  currentTodoList = todoList;
+  currentTodoId = todoList.id;
+  todoLists.push(todoList);
+  saveTodoList();
+  renderTodoList();
+}
+
+// 渲染TodoList
+function renderTodoList() {
+  const todoListElement = document.getElementById('todoList');
+  const todoProgressElement = document.getElementById('todoProgress');
+  
+  if (!currentTodoList || currentTodoList.tasks.length === 0) {
+    todoListElement.innerHTML = '<div class="todo-empty">暂无学习计划</div>';
+    todoProgressElement.textContent = '完成度: 0%';
+    return;
+  }
+  
+  const completedCount = currentTodoList.tasks.filter(task => task.completed).length;
+  const totalCount = currentTodoList.tasks.length;
+  const progressPercentage = Math.round((completedCount / totalCount) * 100);
+  
+  todoProgressElement.textContent = `完成度: ${progressPercentage}%`;
+  
+  let html = '';
+  Object.keys(currentTodoList.groups).forEach(groupName => {
+    const groupTasks = currentTodoList.groups[groupName];
+    const isVerificationGroup = groupName === '验证';
+    html += `<div class="todo-group ${isVerificationGroup ? 'todo-group-verification' : ''}">
+              <h3 style="${isVerificationGroup ? 'color: #007bff;' : ''}">${groupName}${isVerificationGroup ? ' (通过此任务验证原任务)' : ''}</h3>`;
+    
+    groupTasks.forEach(task => {
+      const completionTime = task.completed && task.completedAt ? 
+        new Date(task.completedAt).toLocaleString('zh-CN') : '';
+      const verificationClass = isVerificationGroup ? ' todo-item-verification' : '';
+      html += `<div class="todo-item${verificationClass}">
+                <input type="checkbox" id="task-${task.id}" data-id="${task.id}" ${task.completed ? 'checked' : ''} onchange="toggleTaskCompletion('${task.id}')">
+                <label for="task-${task.id}" class="todo-text" ${task.completed ? 'style="text-decoration: line-through; color: rgba(255,255,255,.6)"' : isVerificationGroup ? 'style="color: #007bff; font-weight: bold;"' : ''}>
+                  ${task.text}
+                </label>
+                ${completionTime ? `<span class="todo-time">${completionTime}</span>` : ''}
+              </div>`;
+    });
+    
+    html += '</div>';
+  });
+  
+  todoListElement.innerHTML = html;
+  
+  // 检查是否所有任务都已完成
+  currentTodoList.completed = completedCount === totalCount;
+  if (currentTodoList.completed) {
+    // 标记为已完成后，设置currentTodoList为null，这样下次不会再发送
+    // 但保留在历史记录中
+    saveTodoList();
+  }
+}
+
+// 切换任务完成状态
+function toggleTaskCompletion(taskId) {
+  if (!currentTodoList) return;
+  
+  let taskFound = false;
+  Object.keys(currentTodoList.groups).forEach(groupName => {
+    const groupTasks = currentTodoList.groups[groupName];
+    const task = groupTasks.find(t => t.id === taskId);
+    
+    if (task) {
+      // 对于验证任务和其他操作保持原有逻辑
+      if (groupName === '验证' || !task.completed) {
+        task.completed = !task.completed;
+        task.completedAt = task.completed ? new Date().toISOString() : null;
+        taskFound = true;
+        
+        const taskText = task.text;
+        const status = task.completed ? '已完成' : '未完成';
+        send(`我${status}了任务：${taskText}`);
+      } else {
+        // 当用户尝试标记非验证任务为完成时，不立即改变状态
+        // 而是发送验证请求给AI
+        taskFound = true;
+        
+        // 保持任务为未完成状态
+        task.completed = false;
+        task.completedAt = null;
+        
+        // 发送验证请求
+        send(`我已完成了任务：${task.text}`);
+        
+        // 显示提示消息给用户
+        showNotification('请等待验证...', 'info');
+      }
+    }
+  });
+  
+  if (taskFound) {
+    saveTodoList();
+    renderTodoList();
+  }
+}
+
+// 保存TodoList
+function saveTodoList() {
+  localStorage.setItem('todoLists', JSON.stringify(todoLists));
+  localStorage.setItem('currentTodoId', currentTodoId);
+}
+
+// 加载TodoList
+function loadTodoList() {
+  const savedTodoLists = localStorage.getItem('todoLists');
+  const savedCurrentTodoId = localStorage.getItem('currentTodoId');
+  
+  if (savedTodoLists) {
+    todoLists = JSON.parse(savedTodoLists);
+    
+    // 查找最近的未完成TodoList
+    const activeTodoList = todoLists.find(todo => !todo.completed);
+    if (activeTodoList) {
+      currentTodoList = activeTodoList;
+      currentTodoId = activeTodoList.id;
+    } else if (savedCurrentTodoId) {
+      // 如果没有未完成的，加载最后一个
+      currentTodoList = todoLists.find(todo => todo.id === savedCurrentTodoId) || null;
+      currentTodoId = savedCurrentTodoId;
+    }
+  }
+}
+
+// 刷新TodoList
+function refreshTodoList() {
+  send('请刷新我的学习计划');
+  closeModal('todoModal');
+}
+
+// 保存TodoList按钮功能
+function saveTodoListButton() {
+  if (currentTodoList) {
+    saveTodoList();
+    // 显示保存成功提示
+    const oldText = document.getElementById('todoProgress').textContent;
+    document.getElementById('todoProgress').textContent = '计划已保存！';
+    setTimeout(() => {
+      document.getElementById('todoProgress').textContent = oldText;
+    }, 2000);
+  }
+}
+
+// 添加聊天记录
+function addToChatHistory(role, name, content) {
+  const message = {
+    id: Date.now().toString(),
+    role: role,
+    name: name,
+    content: content,
+    timestamp: new Date().toISOString()
+  };
+  
+  chatHistory.push(message);
+  
+  // 限制聊天记录数量，避免占用过多内存
+  if (chatHistory.length > 100) {
+    chatHistory.shift();
+  }
+  
+  saveChatHistory();
+}
+
+// 保存聊天记录到localStorage
+function saveChatHistory() {
+  localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+}
+
+// 显示通知消息
+function showNotification(message, type = 'info') {
+  // 创建通知元素
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+  
+  // 添加样式
+  Object.assign(notification.style, {
+    position: 'fixed',
+    top: '80px',
+    right: '20px',
+    padding: '12px 20px',
+    borderRadius: '8px',
+    backgroundColor: type === 'info' ? 'rgba(0, 123, 255, 0.9)' : 
+                     type === 'success' ? 'rgba(40, 167, 69, 0.9)' : 
+                     type === 'error' ? 'rgba(220, 53, 69, 0.9)' : 'rgba(255, 193, 7, 0.9)',
+    color: 'white',
+    fontWeight: 'bold',
+    zIndex: '9999',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+    transform: 'translateX(100%)',
+    transition: 'transform 0.3s ease-out'
+  });
+  
+  document.body.appendChild(notification);
+  
+  // 显示通知
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 10);
+  
+  // 自动隐藏
+  setTimeout(() => {
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => {
+      document.body.removeChild(notification);
+    }, 300);
+  }, 3000);
+}
+
+// 加载聊天记录
+function loadChatHistory() {
+  const savedChatHistory = localStorage.getItem('chatHistory');
+  if (savedChatHistory) {
+    chatHistory = JSON.parse(savedChatHistory);
+  }
+}
+
+// 渲染聊天记录
+function renderChatHistory() {
+  const chatHistoryElement = document.getElementById('chatHistory');
+  const chatStatsElement = document.getElementById('chatStats');
+  
+  if (chatHistory.length === 0) {
+    chatHistoryElement.innerHTML = '<div class="chat-history-empty">暂无聊天记录</div>';
+    chatStatsElement.textContent = '共 0 条消息';
+    return;
+  }
+  
+  let html = '';
+  chatHistory.forEach(message => {
+    const formattedTime = new Date(message.timestamp).toLocaleString('zh-CN');
+    html += `<div class="chat-message ${message.role}">
+              <div class="message-name">${message.name}</div>
+              <div class="message-content">${message.content}</div>
+              <div class="message-time">${formattedTime}</div>
+            </div>`;
+  });
+  
+  chatHistoryElement.innerHTML = html;
+  chatStatsElement.textContent = `共 ${chatHistory.length} 条消息`;
+  
+  // 滚动到底部
+  chatHistoryElement.scrollTop = chatHistoryElement.scrollHeight;
+}
+
+// 清空聊天记录
+function clearChatHistory() {
+  if (confirm('确定要清空所有聊天记录吗？')) {
+    chatHistory = [];
+    saveChatHistory();
+    renderChatHistory();
+  }
+}
+
+function send(msg) {
+  if (!ws || ws.readyState !== 1 || !msg.trim() || isGenerating) return;
+  isGenerating = true;
+  
+  // 保存用户的聊天记录
+  addToChatHistory('user', '你', msg);
+  
+  // 如果有未完成的TodoList，将其添加到消息中
+  let fullMessage = msg;
+  if (currentTodoList && !currentTodoList.completed) {
+    let todoText = '\n\n当前学习计划：';
+    Object.keys(currentTodoList.groups).forEach(groupName => {
+      todoText += `\n【${groupName}】`;
+      currentTodoList.groups[groupName].forEach(task => {
+        const status = task.completed ? '✓' : '□';
+        todoText += `\n${status} ${task.text}`;
+      });
+    });
+    fullMessage += todoText;
+  }
+  
+  ws.send(JSON.stringify({ type: 'set_user_input', data: { text: fullMessage } }));
+  ws.send(JSON.stringify({ type: 'trigger_send_message' }));
+  setTimeout(() => (isGenerating = false), 600);
+}
+
+/* =========================  输入绑定  ========================= */
+const ui = document.getElementById('userInput');
+ui.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { send(ui.value); ui.value = ''; }
+});
+document.getElementById('sendBtn').addEventListener('click', () => {
+  send(ui.value); ui.value = '';
+});
+
+/* 模态框按钮 */
+document.getElementById('bgBtn').addEventListener('click', () => {
+  loadBackgrounds(); openModal('bgModal');
+});
+document.getElementById('charBtn').addEventListener('click', () => {
+  loadCharacters(); openModal('charModal');
+});
+document.getElementById('todoBtn').addEventListener('click', () => {
+  renderTodoList();
+  openModal('todoModal');
+});
+document.getElementById('refreshTodoBtn').addEventListener('click', refreshTodoList);
+document.getElementById('saveTodoBtn').addEventListener('click', saveTodoListButton);
+
+document.getElementById('chatBtn').addEventListener('click', () => {
+  renderChatHistory();
+  openModal('chatModal');
+});
+document.getElementById('clearChatBtn').addEventListener('click', clearChatHistory);
+
+/* =========================  入口  ========================= */
+document.addEventListener('DOMContentLoaded', () => {
+  applySaved();
+  setLove(3);
+  setEmotion('normal');
+  loadTodoList();
+  loadChatHistory();
+  initWS();
+});
+</script>
+
+<style>
+#charImg{ transition: opacity .35s ease; }
+</style>
+
+<!-- AI 提示词（隐藏） -->
+<!--
+你是一位严厉又傲娇的御姐学习助手Gloria-Mentor。每次回复严格按以下XML结构输出：
+<talk>对话内容</talk>
+<emotion>normal|strict|angry|happy|care|encourage</emotion>
+<affection>0|1|2|3|4|5</affection>
+<todoList>
+<todo group="任务类别">具体任务内容</todo>
+<todo group="任务类别">另一个任务内容</todo>
+</todoList>
+
+请特别注意：
+1. 请使用<todo>标签包裹每个任务，并在group属性中指定任务类别
+2. 当用户标记任务完成时，请验证任务完成质量，如果未完成或质量不达标，请重新将任务标记为未完成并更新todoList
+3. 如果用户成功完成所有任务，请生成新的学习计划
+4. 当前面有未完成的学习计划时，请在对话中提醒用户完成
+-->
+</body>
+</html>
